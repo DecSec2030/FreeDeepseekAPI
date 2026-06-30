@@ -637,27 +637,24 @@ async function showStartupMenu() {
 }
 
 async function killExistingServer(port) {
-    const findCmds = [
+    const isWin = process.platform === 'win32';
+    const findCmds = isWin ? [
+        `netstat -ano | findstr :${port} 2>nul`
+    ] : [
         `ss -tlnp "sport = :${port}" 2>/dev/null`,
         `fuser ${port}/tcp 2>/dev/null`,
         `lsof -ti :${port} 2>/dev/null`
     ];
     for (const cmd of findCmds) {
         try {
-            const out = execSync(cmd, { encoding: 'utf8', timeout: 3000 }).trim();
-            const pid = out.match(/pid=(\d+)/)?.[1] || out.split(/\s+/).find(s => /^\d+$/.test(s));
+            const out = execSync(cmd, { encoding: 'utf8', timeout: 3000, shell: true }).trim();
+            const pid = out.match(/pid=(\d+)/)?.[1]
+                || out.split(/\n/).map(l => l.trim().split(/\s+/).pop()).find(s => /^\d+$/.test(s) && s !== '0');
             if (pid) {
                 logger.info(`[Kill] Port ${port} занят PID ${pid}. Завершаю...`);
-                try { execSync(`kill ${pid}`, { timeout: 3000 }); } catch {}
-                let waited = 0;
-                while (waited < 5000) {
-                    try { execSync(`kill -0 ${pid} 2>/dev/null`, { timeout: 1000 }); } catch { break; }
-                    await new Promise(r => setTimeout(r, 200));
-                    waited += 200;
-                }
-                if (waited >= 5000) try { execSync(`kill -9 ${pid} 2>/dev/null`, { timeout: 1000 }); } catch {}
+                try { isWin ? execSync(`taskkill /PID ${pid} /F`, { timeout: 3000 }) : execSync(`kill ${pid}`, { timeout: 3000 }); } catch {}
+                await new Promise(r => setTimeout(r, 1000));
                 logger.info(`[Kill] Старый процесс (PID ${pid}) завершён`);
-                await new Promise(r => setTimeout(r, 500));
                 return;
             }
         } catch (_) {}
