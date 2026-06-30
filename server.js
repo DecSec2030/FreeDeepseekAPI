@@ -637,24 +637,31 @@ async function showStartupMenu() {
 }
 
 async function killExistingServer(port) {
-    try {
-        const out = execSync(`ss -tlnp "sport = :${port}" 2>/dev/null`, { encoding: 'utf8', timeout: 3000 });
-        const match = out.match(/pid=(\d+)/);
-        if (match) {
-            const pid = match[1];
-            logger.info(`[Kill] Port ${port} занят PID ${pid}. Завершаю...`);
-            execSync(`kill ${pid}`, { timeout: 3000 });
-            let waited = 0;
-            while (waited < 5000) {
-                try { execSync(`kill -0 ${pid} 2>/dev/null`, { timeout: 1000 }); } catch { break; }
-                await new Promise(r => setTimeout(r, 200));
-                waited += 200;
+    const findCmds = [
+        `ss -tlnp "sport = :${port}" 2>/dev/null`,
+        `fuser ${port}/tcp 2>/dev/null`,
+        `lsof -ti :${port} 2>/dev/null`
+    ];
+    for (const cmd of findCmds) {
+        try {
+            const out = execSync(cmd, { encoding: 'utf8', timeout: 3000 }).trim();
+            const pid = out.match(/pid=(\d+)/)?.[1] || out.split(/\s+/).find(s => /^\d+$/.test(s));
+            if (pid) {
+                logger.info(`[Kill] Port ${port} занят PID ${pid}. Завершаю...`);
+                try { execSync(`kill ${pid}`, { timeout: 3000 }); } catch {}
+                let waited = 0;
+                while (waited < 5000) {
+                    try { execSync(`kill -0 ${pid} 2>/dev/null`, { timeout: 1000 }); } catch { break; }
+                    await new Promise(r => setTimeout(r, 200));
+                    waited += 200;
+                }
+                if (waited >= 5000) try { execSync(`kill -9 ${pid} 2>/dev/null`, { timeout: 1000 }); } catch {}
+                logger.info(`[Kill] Старый процесс (PID ${pid}) завершён`);
+                await new Promise(r => setTimeout(r, 500));
+                return;
             }
-            if (waited >= 5000) execSync(`kill -9 ${pid} 2>/dev/null`, { timeout: 1000 });
-            logger.info(`[Kill] Старый процесс (PID ${pid}) завершён`);
-            await new Promise(r => setTimeout(r, 500));
-        }
-    } catch (_) {}
+        } catch (_) {}
+    }
 }
 
 async function main() {
