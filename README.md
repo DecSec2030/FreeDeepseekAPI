@@ -2,7 +2,9 @@
 
 OpenAI-совместимый прокси-сервер для DeepSeek Web Chat. Позволяет использовать DeepSeek через любой OpenAI-клиент.
 
-**v1.0.0** — стабильный релиз. [changelog](https://github.com/DecSec2030/FreeDeepseekAPI/releases/tag/v1.0.0)
+**v1.0.0** — стабильный релиз.  
+Форк [ForgetMeAI/FreeDeepseekAPI](https://github.com/ForgetMeAI/FreeDeepseekAPI).  
+[changelog](https://github.com/ForgetMeAI/FreeDeepseekAPI/releases/tag/v1.0.0)
 
 ## Возможности
 
