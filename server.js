@@ -9,7 +9,7 @@ const { logger } = require('./lib/logger');
 const config = require('./lib/config');
 const { accounts, loadDeepSeekConfig, hasAuthConfig, accountStatus, markAccountFailure, markAccountSuccess, selectAccountForSession, readDeepSeekJsonResponse, fetchHifLeimForAccount, buildHeadersWithHif, refreshAllHifLeim, autoRefreshAuth } = require('./lib/auth');
 const { createPOW } = require('./lib/pow');
-const { formatToolDefinitions, parseToolCall, sanitizeContent, buildToolCallResponse, buildTextResponse, normalizeApiParams, toAnthropicResponse, toResponsesResponse, isDeepSeekModelErrorEvent, rebuildFragmentText, applyResponsePatchOperations, extractScreenshotPaths } = require('./lib/parse');
+const { formatToolDefinitions, parseToolCall, sanitizeContent, buildToolCallResponse, buildTextResponse, normalizeApiParams, toAnthropicResponse, toResponsesResponse, isDeepSeekModelErrorEvent, rebuildFragmentText, applyResponsePatchOperations, extractScreenshotPaths, estimateTokens } = require('./lib/parse');
 const { sessions, createSession, getOrCreateAgentSession, runSerialized, storeHistory, saveSessions, loadSessions } = require('./lib/history');
 const { formatErrorResponse } = require('./lib/errors');
 const { sendAnthropicStream, sendResponsesStream, sendOpenAIStream } = require('./lib/http');
@@ -165,7 +165,7 @@ const rateLimitMap = new Map();
 const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Session-Id, X-Fresh-Session');
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
     const ip = req.socket.remoteAddress || 'unknown';
@@ -289,9 +289,18 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
             const remoteAddr = req.socket.remoteAddress || 'unknown';
-            const requestedSession = req.headers['x-agent-session'] || params.session || params.user;
+            const requestedSession = req.headers['x-agent-session'] || req.headers['x-session-id'] || params.session || params.user;
             const agentId = requestedSession ? String(requestedSession) : ((remoteAddr === '127.0.0.1' || remoteAddr === '::1' || remoteAddr === '::ffff:127.0.0.1') ? 'dev-agent' : remoteAddr);
             const agentTag = `[${agentId}][${reqId}]`;
+            if (req.headers['x-fresh-session'] === 'true') {
+                const existing = sessions.get(agentId);
+                if (existing) {
+                    const hCount = existing.history.length;
+                    existing.id = null; existing.parentMessageId = null;
+                    existing.createdAt = null; existing.messageCount = 0;
+                    logger.info(`${agentTag} X-Fresh-Session: session reset (history preserved: ${hCount})`);
+                }
+            }
 
             const lastUserMessage = [...messages].reverse().find(m => m && m.role === 'user');
             const lastUserText = lastUserMessage && typeof lastUserMessage.content === 'string' ? lastUserMessage.content.trim() : '';
