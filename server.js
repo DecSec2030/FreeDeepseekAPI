@@ -637,6 +637,33 @@ async function showStartupMenu() {
 }
 
 async function killExistingServer(port) {
+    // Node.js-native: ищем свой же старый процесс server.js через /proc
+    try {
+        const fs = require('fs');
+        const entries = fs.readdirSync('/proc');
+        for (const e of entries) {
+            if (!/^\d+$/.test(e)) continue;
+            try {
+                const cmd = fs.readFileSync('/proc/' + e + '/cmdline', 'utf8');
+                if (cmd.includes('server.js') && e !== String(process.pid)) {
+                    const pid = parseInt(e, 10);
+                    logger.info(`[Kill] Найден старый server.js PID ${pid}. Завершаю...`);
+                    process.kill(pid, 'SIGTERM');
+                    let waited = 0;
+                    while (waited < 3000) {
+                        try { process.kill(pid, 0); } catch { break; }
+                        await new Promise(r => setTimeout(r, 200));
+                        waited += 200;
+                    }
+                    if (waited >= 3000) try { process.kill(pid, 'SIGKILL'); } catch {}
+                    logger.info(`[Kill] Старый процесс (PID ${pid}) завершён`);
+                    await new Promise(r => setTimeout(r, 500));
+                }
+            } catch (_) {}
+        }
+    } catch (_) {}
+
+    // Fallback: внешние утилиты (Linux/macOS/Windows)
     const isWin = process.platform === 'win32';
     const findCmds = isWin ? [
         `netstat -ano | findstr :${port} 2>nul`
@@ -652,7 +679,7 @@ async function killExistingServer(port) {
                 || out.split(/\n/).map(l => l.trim().split(/\s+/).pop()).find(s => /^\d+$/.test(s) && s !== '0');
             if (pid) {
                 logger.info(`[Kill] Port ${port} занят PID ${pid}. Завершаю...`);
-                try { isWin ? execSync(`taskkill /PID ${pid} /F`, { timeout: 3000 }) : execSync(`kill ${pid}`, { timeout: 3000 }); } catch {}
+                try { process.kill(parseInt(pid, 10), 'SIGTERM'); } catch {}
                 await new Promise(r => setTimeout(r, 1000));
                 logger.info(`[Kill] Старый процесс (PID ${pid}) завершён`);
                 return;
