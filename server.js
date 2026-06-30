@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 const http = require('http');
-const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const readline = require('readline');
@@ -8,11 +7,11 @@ const { spawnSync } = require('child_process');
 
 const { logger } = require('./lib/logger');
 const config = require('./lib/config');
-const { accounts, buildBaseHeaders, loadDeepSeekConfig, hasAuthConfig, accountStatus, markAccountFailure, markAccountSuccess, selectAccountForSession, readDeepSeekJsonResponse, fetchHifLeimForAccount, buildHeadersWithHif, refreshAllHifLeim, autoRefreshAuth, _hifCache } = require('./lib/auth');
+const { accounts, loadDeepSeekConfig, hasAuthConfig, accountStatus, markAccountFailure, markAccountSuccess, selectAccountForSession, readDeepSeekJsonResponse, fetchHifLeimForAccount, buildHeadersWithHif, refreshAllHifLeim, autoRefreshAuth } = require('./lib/auth');
 const { createPOW } = require('./lib/pow');
-const { formatToolDefinitions, parseToolCall, sanitizeContent, buildToolCallResponse, buildTextResponse, normalizeApiParams, toAnthropicResponse, toResponsesResponse, isAssistantOutputFragment, isReasoningFragment, isDeepSeekModelErrorEvent, rebuildFragmentText, applyResponsePatchOperations, extractScreenshotPaths } = require('./lib/parse');
+const { formatToolDefinitions, parseToolCall, sanitizeContent, buildToolCallResponse, buildTextResponse, normalizeApiParams, toAnthropicResponse, toResponsesResponse, isDeepSeekModelErrorEvent, rebuildFragmentText, applyResponsePatchOperations, extractScreenshotPaths } = require('./lib/parse');
 const { sessions, createSession, getOrCreateAgentSession, runSerialized, storeHistory, saveSessions, loadSessions } = require('./lib/history');
-const { writeSse, sendAnthropicStream, sendResponsesStream, sendOpenAIStream } = require('./lib/http');
+const { sendAnthropicStream, sendResponsesStream, sendOpenAIStream } = require('./lib/http');
 
 process.on('unhandledRejection', (reason) => {
     logger.error('[FATAL] Unhandled Rejection:', reason instanceof Error ? reason.stack : String(reason));
@@ -423,8 +422,6 @@ const server = http.createServer(async (req, res) => {
                         const tcXmlMatch = streamContent.match(/<tool_call[^>]*>/i);
                         const tcLegacyMatch = streamContent.match(/TOOL_CALL:\s*\w+/i);
                         if (tcXmlMatch || tcLegacyMatch) {
-                            const splitAt = tcXmlMatch ? tcXmlMatch.index : streamContent.indexOf('TOOL_CALL:');
-                            const beforeTC = streamContent.substring(0, splitAt);
                             // Suppress text before tool call to avoid duplicates
                             contentBuffer = '';
                             toolCallMode = true;
@@ -460,7 +457,7 @@ const server = http.createServer(async (req, res) => {
                 if (toolCallMode && !detectedToolCall) {
                     contentBuffer = '';
                 }
-                const { content: streamResultContent, reasoningContent: streamResultReasoning, messageId: newMessageId, finishReason: finishReason_, modelError: modelError_ } = streamResult;
+                const { messageId: newMessageId, finishReason: finishReason_ } = streamResult;
                 if (newMessageId) { session.parentMessageId = newMessageId; session.messageCount++; }
                 session.lastUsedAt = Date.now();
                 markAccountSuccess(account);
@@ -470,7 +467,6 @@ const server = http.createServer(async (req, res) => {
                 res.write(`data: ${JSON.stringify({ id: chunkId, object: 'chat.completion.chunk', created, model: modelName, choices: [{ index: 0, delta: {}, finish_reason: finalFinishReason }] })}\n\n`);
                 res.write('data: [DONE]\n\n'); res.end();
                 const finalContent = sanitizeContent(streamContent);
-                const finalReasoning = sanitizeContent(streamReasoning);
                 const toolCall = detectedToolCall || parseToolCall(finalContent);
                 storeHistory(agentId, prompt, finalContent, toolCall);
                 logger.info(`${agentTag} Streamed ${apiMode} (tool=${!!toolCall}) in ${elapsed}ms`);
@@ -478,7 +474,11 @@ const server = http.createServer(async (req, res) => {
             }
 
             // Non-streaming
-            let { content: fullContent, reasoningContent, finishReason, modelError } = await readDeepSeekResponse(dsResp.body);
+            const readResult = await readDeepSeekResponse(dsResp.body);
+            let fullContent = readResult.content;
+            let reasoningContent = readResult.reasoningContent || '';
+            let finishReason = readResult.finishReason;
+            const modelError = readResult.modelError;
             fullContent = sanitizeContent(fullContent);
             reasoningContent = sanitizeContent(reasoningContent || '');
             const elapsed = Date.now() - startTime;
