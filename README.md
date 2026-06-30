@@ -97,6 +97,37 @@ curl http://localhost:9655/v1/chat/completions \
   }'
 ```
 
+### OpenCode CLI
+
+Настрой провайдер в `~/.config/opencode/opencode.jsonc`:
+
+```json
+{
+  "providers": {
+    "deepseek-local": {
+      "package": "@ai-sdk/openai-compatible",
+      "url": "http://localhost:9655/v1",
+      "models": {
+        "deepseek-chat": {},
+        "deepseek-reasoner": {},
+        "deepseek-v4-flash": {},
+        "deepseek-v4-flash-reasoner": {},
+        "deepseek-v4-pro": {},
+        "deepseek-expert": {}
+      }
+    }
+  }
+}
+```
+
+Запуск:
+
+```bash
+opencode --provider deepseek-local --model deepseek-v4-flash
+```
+
+Внутри OpenCode можно переключать модель через `/model`.
+
 ### Anthropic Messages (для Claude Code)
 
 ```bash
