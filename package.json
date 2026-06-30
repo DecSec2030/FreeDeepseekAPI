@@ -4,8 +4,8 @@
   "description": "OpenAI-compatible local API proxy for DeepSeek Web chat",
   "main": "server.js",
   "bin": {
-    "free-deepseek-api": "./server.js",
-    "free-deepseek-client": "./client.js"
+    "free-deepseek-api": "server.js",
+    "free-deepseek-client": "client.js"
   },
   "scripts": {
     "start": "node server.js",
@@ -30,6 +30,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ForgetMeAI/FreeDeepseekAPI.git"
-  }
+    "url": "git+https://github.com/ForgetMeAI/FreeDeepseekAPI.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ForgetMeAI/FreeDeepseekAPI/issues"
+  },
+  "homepage": "https://github.com/ForgetMeAI/FreeDeepseekAPI#readme",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib",
+    "test": "tests"
+  },
+  "author": ""
 }

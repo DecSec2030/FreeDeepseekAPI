@@ -131,8 +131,8 @@ async function askDeepSeekStream(promptText, agentId, model = 'deepseek-default'
 }
 
 function resolveModelConfig(model) {
-    const requested = String(model || 'deepseek-v4-flash').toLowerCase();
-    const cfg = MODEL_CONFIGS[requested] || MODEL_CONFIGS['deepseek-v4-flash'];
+    const requested = String(model || 'deepseek-v4-flash-reasoner').toLowerCase();
+    const cfg = MODEL_CONFIGS[requested] || MODEL_CONFIGS['deepseek-v4-flash-reasoner'];
     if (cfg && cfg.deprecated_since) {
         logger.warn(`[MODEL] "${requested}" is deprecated since ${cfg.deprecated_since}. Use deepseek-v4-flash or deepseek-v4-flash-reasoner instead.`);
     }
