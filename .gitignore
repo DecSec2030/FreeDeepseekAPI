@@ -4,6 +4,9 @@ sessions.json
 node_modules/
 .DS_Store
 deepseek-auth*.json
+deepseek-auth.json
+.env
+.env.*
 auth_firefox.js
 server.js.bak
 start.js

@@ -26,7 +26,17 @@ cd FreeDeepseekAPI
 
 ## Настройка
 
-### Получение DeepSeek auth
+### Через переменные окружения (рекомендуется)
+
+```bash
+export DEEPSEEK_TOKEN="твой_userToken"
+export DEEPSEEK_COOKIE="smidV2=твоя_cookie"
+export DEEPSEEK_HIF_DLIQ="опционально"
+export DEEPSEEK_HIF_LEIM="опционально"
+export DEEPSEEK_WASM_URL="https://fe-static.deepseek.com/chat/static/sha3_wasm_bg.7b9ca65ddd.wasm"
+```
+
+### Через файл deepseek-auth.json (альтернатива)
 
 1. Открой https://chat.deepseek.com в браузере
 2. Открой Инструменты разработчика → Application → Local Storage
@@ -41,6 +51,8 @@ cd FreeDeepseekAPI
 ```
 
 Либо используй встроенный импорт: запусти сервер и выбери пункт 2.
+
+**Важно:** `deepseek-auth.json` добавлен в `.gitignore` — он не попадёт в репозиторий.
 
 ### Альтернатива: экспорт cookie через Firefox (для Termux)
 
@@ -172,6 +184,11 @@ curl http://localhost:9655/v1/messages \
 | `CIRCUIT_BREAKER_COOLDOWN_MS` | 300000 | Время остывания circuit breaker |
 | `SESSION_STORE_PATH` | sessions.json | Путь к файлу сессий |
 | `DEEPSEEK_AUTH_PATH` | deepseek-auth.json | Путь к файлу auth |
+| `DEEPSEEK_TOKEN` | — | Токен DeepSeek (приоритет над файлом) |
+| `DEEPSEEK_COOKIE` | — | Cookie DeepSeek (приоритет над файлом) |
+| `DEEPSEEK_HIF_DLIQ` | — | hif_dliq (из env, опционально) |
+| `DEEPSEEK_HIF_LEIM` | — | hif_leim (из env, опционально) |
+| `DEEPSEEK_WASM_URL` | — | URL WASM-солвера (из env, опционально) |
 | `NON_INTERACTIVE` | — | Пропустить меню при запуске |
 | `SKIP_ACCOUNT_MENU` | — | Пропустить меню при запуске |
 
