@@ -11,6 +11,7 @@ const { accounts, loadDeepSeekConfig, hasAuthConfig, accountStatus, markAccountF
 const { createPOW } = require('./lib/pow');
 const { formatToolDefinitions, parseToolCall, sanitizeContent, buildToolCallResponse, buildTextResponse, normalizeApiParams, toAnthropicResponse, toResponsesResponse, isDeepSeekModelErrorEvent, rebuildFragmentText, applyResponsePatchOperations, extractScreenshotPaths } = require('./lib/parse');
 const { sessions, createSession, getOrCreateAgentSession, runSerialized, storeHistory, saveSessions, loadSessions } = require('./lib/history');
+const { formatErrorResponse } = require('./lib/errors');
 const { sendAnthropicStream, sendResponsesStream, sendOpenAIStream } = require('./lib/http');
 
 process.on('unhandledRejection', (reason) => {
@@ -269,7 +270,6 @@ const server = http.createServer(async (req, res) => {
     let body = '';
     req.on('data', chunk => body += chunk);
     req.on('end', async () => {
-        try {
             const rawParams = JSON.parse(body || '{}');
             const params = normalizeApiParams(rawParams, apiMode);
             const messages = params.messages || [];
@@ -313,6 +313,8 @@ const server = http.createServer(async (req, res) => {
                 }
                 return;
             }
+
+            try {
 
             return await runSerialized(agentId, async () => {
             const { prompt, systemPrompt } = formatMessages(messages, tools);
@@ -582,20 +584,21 @@ const server = http.createServer(async (req, res) => {
             }
         });
         } catch (e) {
+            metrics.errors++;
             const errMsg = String(e.message || '').toLowerCase();
-            if (errMsg.includes('auth') || errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('expired')) {
-                logger.info('[DS-API] Auth error detected, trying auto-refresh...');
+            const errCode = e.code || 'SERVER_ERROR';
+            const { status, body } = formatErrorResponse(e, { agentId });
+            logger.info(`[DS-API][${errCode}] Error: ${e.message}`);
+            if (e.code === 'AUTH_EXPIRED' || errMsg.includes('auth') || errMsg.includes('401') || errMsg.includes('403')) {
+                logger.info('[DS-API] Auth error, trying auto-refresh...');
                 const refreshed = await autoRefreshAuth(true);
                 if (refreshed) {
-                    res.writeHead(503, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: { message: 'Auth expired, retry request after refresh', type: 'auth_retry', refreshed: true } }));
-                    return;
+                    body.error.refreshed = true;
+                    body.error.message += ' Auth refreshed, retry.';
                 }
             }
-            metrics.errors++;
-            logger.info('[DS-API] Error:', e.message);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: { message: e.message, type: 'server_error' } }));
+            res.writeHead(status, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(body));
         }
     });
 });

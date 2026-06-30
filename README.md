@@ -232,7 +232,8 @@ FreeDeepseekAPI/
 │   ├── pow.js         # PoW (WASM solver)
 │   ├── parse.js       # Парсинг tool calls и ответов
 │   ├── history.js     # Сессии и персистентность
-│   └── http.js        # SSE-стримеры
+│   ├── http.js        # SSE-стримеры
+│   ├── errors.js      # Коды ошибок и форматирование ответов
 ├── scripts/           # Вспомогательные скрипты
 ├── tests/             # Тесты
 │   ├── unit.test.js   # Юнит-тесты
@@ -269,3 +270,30 @@ node scripts/deepseek_chrome_auth.js
 ### Пустой ответ от DeepSeek
 
 Прокси автоматически делает до 3 повторных попыток со сбросом сессии. Если не помогает — проблема на стороне DeepSeek.
+
+## Коды ошибок
+
+Все ошибки возвращаются в формате:
+
+```json
+{
+  "error": {
+    "code": "AUTH_EXPIRED",
+    "message": "DeepSeek token истёк. Обнови через env vars.",
+    "type": "auth_expired"
+  }
+}
+```
+
+| Код | HTTP | Описание |
+|-----|------|----------|
+| `AUTH_EXPIRED` | 401 | DeepSeek token истёк. Обнови `DEEPSEEK_TOKEN`/`DEEPSEEK_COOKIE` или перезапусти сервер с новым `deepseek-auth.json` |
+| `ACCOUNT_BANNED` | 403 | Аккаунт заблокирован или rate-limited. Попробуй другой аккаунт или подожди 5-10 минут |
+| `CIRCUIT_OPEN` | 503 | Аккаунт временно недоступен из-за серии ошибок. Повтори через минуту (cooldown ~5 мин) |
+| `RATE_LIMIT` | 429 | Слишком много одновременных запросов на аккаунт. Уменьши `MAX_CONCURRENT_PER_ACCOUNT` или добавь больше аккаунтов |
+| `DEEPSEEK_ERROR` | 502 | DeepSeek API вернул ошибку. Повтори запрос позже |
+| `EMPTY_RESPONSE` | 502 | DeepSeek вернул пустой ответ после нескольких попыток |
+| `POW_FAILED` | 502 | PoW challenge не пройден — скорее всего устаревший auth |
+| `INVALID_MODEL` | 400 | Неизвестная модель. Список: `GET /v1/models` |
+| `UNSUPPORTED_MODEL` | 400 | Модель не поддерживается через этот прокси |
+| `SERVER_ERROR` | 500 | Внутренняя ошибка сервера (смотри логи)
