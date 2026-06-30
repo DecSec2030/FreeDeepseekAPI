@@ -16,6 +16,7 @@ OpenAI-совместимый прокси-сервер для DeepSeek Web Chat
 - Персистентность истории (при перезапуске)
 - Prometheus-метрики (`GET /metrics`)
 - SIGHUP reload конфига без рестарта
+- Автоубийство старого процесса на порту при запуске (Linux/macOS/Windows)
 
 ## Установка
 
@@ -254,11 +255,12 @@ bash tests/smoke.sh
 
 ### EADDRINUSE — порт занят
 
+Сервер сам убивает старый процесс при запуске (через ss/fuser/lsof на Linux/macOS, netstat+taskkill на Windows). Если нужно вручную:
+
 ```bash
 fuser -k 9655/tcp
 # или
 pkill -f "node server.js"
-sleep 3
 # затем запусти снова
 ```
 
