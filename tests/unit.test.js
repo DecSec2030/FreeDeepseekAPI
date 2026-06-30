@@ -143,3 +143,93 @@ test('DeepSeek stream parser does not treat service content chunks as model erro
   assert.equal(serverInternals.isDeepSeekModelErrorEvent({ finish_reason: 'stop' }), false);
   assert.equal(serverInternals.isDeepSeekModelErrorEvent({ type: 'error', content: 'backend error' }), true);
 });
+
+test('parseToolCall detects XML tool_call format', () => {
+  const result = serverInternals.parseToolCall('<tool_call>{"name": "write", "arguments": {"filePath": "/tmp/x.txt", "content": "hi"}}</tool_call>');
+  assert.notEqual(result, null);
+  assert.equal(result.name, 'write');
+});
+
+test('parseToolCall detects TOOL_CALL: legacy format', () => {
+  const result = serverInternals.parseToolCall('TOOL_CALL: write\narguments: {"filePath": "/tmp/x.txt", "content": "hi"}');
+  assert.notEqual(result, null);
+  assert.equal(result.name, 'write');
+});
+
+test('parseToolCall detects multiple TOOL_CALL:', () => {
+  const result = serverInternals.parseToolCall('TOOL_CALL: write\narguments: {"filePath": "/tmp/a.txt", "content": "a"}\nTOOL_CALL: write\narguments: {"filePath": "/tmp/b.txt", "content": "b"}');
+  assert.equal(Array.isArray(result), true);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].name, 'write');
+  assert.equal(result[1].name, 'write');
+});
+
+test('parseToolCall returns null for plain text', () => {
+  assert.equal(serverInternals.parseToolCall('Hello, how are you?'), null);
+});
+
+test('formatToolDefinitions returns empty string for no tools', () => {
+  assert.equal(serverInternals.formatToolDefinitions([]), '');
+  assert.equal(serverInternals.formatToolDefinitions(null), '');
+});
+
+test('formatToolDefinitions includes function names', () => {
+  const tools = [{ type: 'function', function: { name: 'bash', description: 'Run a shell command' } }];
+  const result = serverInternals.formatToolDefinitions(tools);
+  assert.match(result, /bash/);
+  assert.match(result, /TOOL_CALL/);
+});
+
+test('buildToolCallResponse returns tool_calls format', () => {
+  const tc = { name: 'bash', arguments: '{"command": "ls"}' };
+  const resp = serverInternals.buildToolCallResponse(tc, 'test-model');
+  assert.equal(resp.choices[0].finish_reason, 'tool_calls');
+  assert.equal(resp.choices[0].message.tool_calls.length, 1);
+  assert.equal(resp.choices[0].message.tool_calls[0].function.name, 'bash');
+  assert.equal(resp.choices[0].message.content, null);
+});
+
+test('buildToolCallResponse handles array of tool calls', () => {
+  const tcs = [
+    { name: 'bash', arguments: '{"command": "ls"}' },
+    { name: 'write', arguments: '{"filePath": "/tmp/x"}' },
+  ];
+  const resp = serverInternals.buildToolCallResponse(tcs, 'test-model');
+  assert.equal(resp.choices[0].message.tool_calls.length, 2);
+});
+
+test('buildTextResponse returns text response', () => {
+  const resp = serverInternals.buildTextResponse('Hello!', 'Prompt', 'test-model');
+  assert.equal(resp.choices[0].message.content, 'Hello!');
+  assert.equal(resp.choices[0].finish_reason, 'stop');
+});
+
+test('buildTextResponse includes reasoning_content', () => {
+  const resp = serverInternals.buildTextResponse('Hello!', 'Prompt', 'test-model', 'Some reasoning');
+  assert.equal(resp.choices[0].message.reasoning_content, 'Some reasoning');
+});
+
+test('sanitizeContent removes surrogate characters', () => {
+  assert.equal(serverInternals.sanitizeContent('hello\uD800world'), 'helloworld');
+  assert.equal(serverInternals.sanitizeContent('normal text'), 'normal text');
+});
+
+test('normalizeApiParams handles Anthropic format', () => {
+  const params = {
+    model: 'deepseek-v4-flash',
+    messages: [{ role: 'user', content: 'Hi' }],
+    stream: false,
+  };
+  const result = serverInternals.normalizeApiParams(params, 'anthropic');
+  assert.equal(result.messages.length, 1);
+  assert.equal(result.messages[0].role, 'user');
+});
+
+test('normalizeApiParams handles Responses format', () => {
+  const params = {
+    model: 'deepseek-v4-flash',
+    input: [{ role: 'user', content: 'Hi' }],
+  };
+  const result = serverInternals.normalizeApiParams(params, 'responses');
+  assert.equal(result.messages.length, 1);
+});
